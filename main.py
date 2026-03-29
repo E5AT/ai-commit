@@ -44,6 +44,8 @@ def get_staged_diff(path: str | None = None) -> str:
             text=True,
             check=True,
             cwd=path,
+            encoding="utf-8",
+            errors="replace",
         )
         return result.stdout
     except subprocess.CalledProcessError as e:
