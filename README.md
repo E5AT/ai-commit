@@ -120,13 +120,13 @@ pytest --cov=. --cov-report=term-missing
 
 1. Runs `git diff --staged` to capture your staged changes
 2. Truncates diff to 4000 characters (prevents API limits)
-3. Sends the diff to Gemini 2.5 Flash with a system prompt
+3. Sends the diff to Gemini 3 Flash (gemini-3-flash-preview) with a system prompt
 4. Returns a conventional commit message in `type(scope): description` format
 5. Optionally executes `git commit` with the generated message
 
 ## Why Gemini API
 
-Gemini 2.5 Flash was chosen for its generous free tier, which makes this tool practical for daily use without any cost. No paid subscription required.
+Gemini 3 Flash (gemini-3-flash-preview) was chosen for its generous free tier, which makes this tool practical for daily use without any cost. No paid subscription required.
 
 ## License
 

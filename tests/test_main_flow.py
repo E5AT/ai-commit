@@ -121,7 +121,7 @@ class TestConstants:
 
     def test_gemini_model_name(self):
         """Test GEMINI_MODEL is set correctly."""
-        assert main.GEMINI_MODEL == "gemini-2.5-flash"
+        assert main.GEMINI_MODEL == "gemini-3-flash-preview"
 
     def test_system_prompt_exists(self):
         """Test system prompt is defined."""

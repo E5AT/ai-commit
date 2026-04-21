@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 import google.generativeai as genai
 
 
-GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_MODEL = "gemini-3-flash-preview"
 MAX_DIFF_LENGTH = 4000
 SYSTEM_PROMPT = "You are a Git commit message expert. I will give you a git diff. Read it carefully. Generate ONE conventional commit message that describes ONLY the changes in that specific diff. Do not describe any tool, generator, or AI system. Do not make up context. Base the message solely on what you see in the diff. Format: type(scope): description. Types: feat, fix, docs, refactor, chore. Max 72 characters. Return ONLY the commit message with no explanation."
 
