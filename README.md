@@ -63,10 +63,20 @@ ai-commit --help
 
 ## Global CLI Setup (WSL / Linux)
 
-To use `ai-commit` as a global command from anywhere in your terminal:
+To use `ai-commit` as a global command from anywhere:
+
+1. Create a wrapper script at `/path/to/ai-commit/ai-commit`:
 
 ```bash
-# Create a symlink in your PATH
+#!/bin/bash
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CALLING_DIR="$PWD"
+cd "$SCRIPT_DIR" && python main.py --dir "$CALLING_DIR" "$@"
+```
+
+2. Create a symlink in your PATH:
+
+```bash
 sudo ln -s /path/to/ai-commit/ai-commit /usr/local/bin/ai-commit
 
 # Make sure the shell script is executable
@@ -82,7 +92,6 @@ After this you can run `ai-commit` from any git repository without specifying th
 ```
 ai-commit/
 ├── main.py           # Main entry point
-├── ai-commit         # Shell script for global CLI usage
 ├── requirements.txt  # Dependencies
 ├── .env              # API key storage (not committed)
 ├── tests/            # Test suite (50 tests, 96% coverage)

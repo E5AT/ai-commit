@@ -1,4 +1,0 @@
-#!/bin/bash
-SCRIPT_DIR="/mnt/c/Users/esatc/Desktop/AI-Projects/ai-commit"
-CALLING_DIR="$PWD"
-cd "$SCRIPT_DIR" && python main.py --dir "$CALLING_DIR" "$@"
