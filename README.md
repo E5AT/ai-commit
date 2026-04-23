@@ -43,6 +43,9 @@ git add .
 ai-commit
 # Output: feat: add user authentication module
 
+# Interactive mode - show changes, generate message, confirm
+ai-commit -i
+
 # Automatically commit with the generated message
 ai-commit --apply
 
@@ -58,6 +61,7 @@ ai-commit --help
 | Flag | Description |
 |------|-------------|
 | `--apply` | Automatically commit with the generated message |
+| `--interactive`, `-i` | Interactive mode: show changes, generate message, confirm |
 | `--dry-run` | Print message without committing (default) |
 | `--dir` | Directory to run git diff in |
 
