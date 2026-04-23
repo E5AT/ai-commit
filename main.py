@@ -22,6 +22,12 @@ def parse_args() -> argparse.Namespace:
         help="Automatically commit with the generated message",
     )
     parser.add_argument(
+        "--interactive",
+        "-i",
+        action="store_true",
+        help="Interactive mode: show diff, generate message, ask for confirmation",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         default=True,
@@ -115,6 +121,62 @@ def apply_git_commit(message: str, path: str | None = None) -> None:
         sys.exit(1)
 
 
+def get_staged_summary(path: str | None = None) -> str:
+    try:
+        result = subprocess.run(
+            ["git", "diff", "--staged", "--stat"],
+            capture_output=True,
+            text=True,
+            check=True,
+            cwd=path,
+            encoding="utf-8",
+            errors="replace",
+        )
+        if result.stdout.strip():
+            lines = result.stdout.strip().split("\n")
+            return "\n".join(lines[-3:]) if len(lines) > 3 else result.stdout.strip()
+        return "No staged changes"
+    except subprocess.CalledProcessError:
+        return "No staged changes"
+
+
+def run_interactive(diff: str, api_key: str, path: str | None = None) -> None:
+    summary = get_staged_summary(path)
+
+    print("\nStaged changes:")
+    print(summary)
+
+    input("\nPress Enter to generate commit message...")
+
+    while True:
+        print("\nGenerating commit message...")
+        commit_message = call_gemini_api(diff, api_key)
+
+        print(f"\nGenerated commit message:")
+        print(f"  {commit_message}")
+
+        while True:
+            response = input("\nUse this message? [y/n/r]: ").strip().lower()
+
+            if response == "y":
+                print(f"\nCommitting: {commit_message}")
+                apply_git_commit(commit_message, path)
+                return
+            elif response == "n":
+                print("\nRegenerating...")
+                break
+            elif response == "r":
+                custom = input("Enter custom commit message: ").strip()
+                if custom:
+                    print(f"\nCommitting: {custom}")
+                    apply_git_commit(custom, path)
+                    return
+                else:
+                    print("Please enter a message, or press n/r to regenerate.")
+            else:
+                print("Please enter y (yes), n (no/new), or r (custom).")
+
+
 def main() -> None:
     load_dotenv()
     args = parse_args()
@@ -124,6 +186,11 @@ def main() -> None:
     diff = truncate_diff(diff)
 
     api_key = get_gemini_api_key()
+
+    if args.interactive:
+        run_interactive(diff, api_key, args.dir)
+        return
+
     commit_message = call_gemini_api(diff, api_key)
 
     print(commit_message)
