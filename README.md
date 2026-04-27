@@ -16,6 +16,9 @@ cd ai-commit
 
 # Install dependencies
 pip install -r requirements.txt
+
+# For TUI mode (optional but recommended)
+pip install textual
 ```
 
 ## Gemini API Key Setup
@@ -43,7 +46,7 @@ git add .
 ai-commit
 # Output: feat: add user authentication module
 
-# Interactive mode - show changes, generate message, confirm
+# Interactive TUI mode (recommended)
 ai-commit -i
 
 # Automatically commit with the generated message
@@ -56,12 +59,33 @@ ai-commit --dir /path/to/repo
 ai-commit --help
 ```
 
+## Interactive Mode (TUI)
+
+Run `ai-commit -i` for a full-screen interactive interface:
+
+- **g** - Generate commit message
+- **Arrow keys** - Navigate between buttons
+- **Enter** - Apply / Activate button
+- **r** - Regenerate message
+- **escape** - Cancel and exit
+
+### TUI Controls
+
+| Key | Action |
+|-----|--------|
+| `g` | Generate message |
+| `←` `→` | Navigate buttons |
+| `Enter` | Apply selected |
+| `r` | Regenerate |
+| `Esc` | Cancel |
+
 ## CLI Options
 
 | Flag | Description |
 |------|-------------|
 | `--apply` | Automatically commit with the generated message |
-| `--interactive`, `-i` | Interactive mode: show changes, generate message, confirm |
+| `--interactive`, `-i` | Interactive TUI mode |
+| `--tui` | Force TUI mode (requires textual) |
 | `--dry-run` | Print message without committing (default) |
 | `--dir` | Directory to run git diff in |
 
