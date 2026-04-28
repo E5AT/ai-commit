@@ -61,13 +61,13 @@ ai-commit --help
 
 ## Interactive Mode (TUI)
 
-Run `ai-commit -i` for a full-screen interactive interface:
+Run `ai-commit -i` for a full-screen interactive interface with Claude Code-inspired design:
 
 - **g** - Generate commit message
-- **Arrow keys** - Navigate between buttons
-- **Enter** - Apply / Activate button
-- **r** - Regenerate message
-- **escape** - Cancel and exit
+- **Arrow keys** - Navigate between buttons  
+- **Enter** - Apply selected button
+- **c** - Copy message to clipboard
+- **q** / **Escape** - Quit
 
 ### TUI Controls
 
@@ -76,8 +76,29 @@ Run `ai-commit -i` for a full-screen interactive interface:
 | `g` | Generate message |
 | `←` `→` | Navigate buttons |
 | `Enter` | Apply selected |
-| `r` | Regenerate |
-| `Esc` | Cancel |
+| `c` | Copy to clipboard |
+| `q` `Esc` | Quit |
+
+### TUI Features
+
+- Dark theme with Claude Code-inspired colors
+- Staged files list with green "+" prefix
+- Animated spinner while generating (rotating braille characters)
+- Custom spinner messages via `spinner_messages.txt`
+- Focus indicator with "▶" prefix on selected button
+- Clipboard support (requires pyperclip)
+
+### Customizing Spinner Messages
+
+Create `spinner_messages.txt` in the project root to customize spinner messages:
+
+```
+Thinking
+Analyzing diff
+Reading changes
+```
+
+Each line displays with "..." automatically appended if missing.
 
 ## CLI Options
 
@@ -119,10 +140,11 @@ After this you can run `ai-commit` from any git repository without specifying th
 
 ```
 ai-commit/
-├── main.py           # Main entry point
-├── requirements.txt  # Dependencies
-├── .env              # API key storage (not committed)
-├── tests/            # Test suite (50 tests, 96% coverage)
+├── main.py              # Main entry point
+├── requirements.txt     # Dependencies
+├── spinner_messages.txt # Spinner animation messages (optional)
+├── .env               # API key storage (not committed)
+├── tests/             # Test suite (50 tests, 96% coverage)
 │   ├── conftest.py
 │   ├── test_api_calls.py
 │   ├── test_edge_cases.py
