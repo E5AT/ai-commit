@@ -16,9 +16,7 @@ except ImportError:
 
 try:
     from textual.app import App, ComposeResult
-    from textual.containers import Container, Horizontal, VerticalScroll
-    from textual.widgets import Static, Button
-    from textual import work
+    from textual.widgets import Static
     TEXTUAL_AVAILABLE = True
 except ImportError:
     TEXTUAL_AVAILABLE = False
@@ -58,86 +56,74 @@ def load_spinner_messages() -> list[str]:
 
 SPINNER_MESSAGES = load_spinner_messages()
 
-BG = "#1a1a2e"
-HEADER_BG = "#16213e"
+BG = "#0d0d0d"
 ACCENT = "#e8624a"
-TEXT_PRIMARY = "#e0e0e0"
-TEXT_SECONDARY = "#888888"
+TEXT_DIM = "#333333"
+TEXT_MID = "#444444"
+TEXT_LIGHT = "#555555"
+TEXT_FILE = "#bbbbbb"
 SUCCESS = "#4caf7d"
-ERROR = "#e85d4a"
-BORDER = "#2d2d4e"
-INPUT_BG = "#0f0f1a"
+ERROR = "#e24b4a"
+BORDER = "#1e1e1e"
 
 CSS = f"""
 Screen {{
     background: {BG};
+    overflow-y: hidden;
 }}
-#header-title {{
-    color: #e8624a;
-    text-style: bold;
+#app {{
+    width: 100%;
 }}
-#header-subtitle {{
-    color: {TEXT_SECONDARY};
-}}
-#staged-panel {{
-    border: solid {BORDER};
-    padding: 1;
-    background: {BG};
-}}
-#staged-title {{
-    color: {TEXT_SECONDARY};
-    text-style: bold;
-}}
-#staged-list {{
-    color: {SUCCESS};
-}}
-.divider {{
+.hline {{
     height: 1;
-    color: {BORDER};
+    background: {BORDER};
 }}
-#message-panel {{
-    border: solid {BORDER};
-    padding: 1;
+#header {{
+    height: 1;
+    dock: top;
     background: {BG};
 }}
-#message-title {{
-    color: {TEXT_SECONDARY};
-    text-style: bold;
+.section-label {{
+    color: {TEXT_MID};
 }}
-#message-content {{
+#file-count {{
+    color: {TEXT_LIGHT};
+}}
+#file-list {{
+    color: {TEXT_FILE};
+}}
+#commit-list {{
+    color: {TEXT_FILE};
+}}
+.commit-placeholder {{
+    color: {TEXT_DIM};
+    text-style: italic;
+}}
+.commit-message {{
     color: {ACCENT};
     text-style: bold;
 }}
-#status {{
-    color: {TEXT_SECONDARY};
-}}
-#status-generating {{
+#spinner-line {{
     color: {ACCENT};
-    text-style: bold;
-}}
-#status-error {{
-    color: {ERROR};
-}}
-#button-row {{
-    align: center middle;
-    height: auto;
-    padding: 1 2;
 }}
 .btn {{
-    color: {TEXT_SECONDARY};
-    padding: 0 2;
-    min-width: 18;
+    color: {TEXT_MID};
 }}
 .btn-selected {{
-    background: {ACCENT};
-    color: #ffffff;
+    color: {ACCENT};
     text-style: bold;
 }}
-.btn-disabled {{
-    color: #444444;
+.branch {{
+    color: {TEXT_MID};
 }}
-#footer-keys {{
-    color: {TEXT_SECONDARY};
+.bullet {{
+    color: {ACCENT};
+}}
+.error-text {{
+    color: {ERROR};
+}}
+.success-text {{
+    color: {SUCCESS};
 }}
 """
 
@@ -217,19 +203,6 @@ def apply_git_commit(message: str, path: str | None = None) -> bool:
         return False
 
 
-def run_interactive_cli(diff: str, api_key: str, path: str | None = None) -> None:
-    files = get_staged_files(path)
-    print("\nStaged files:")
-    for f in files:
-        print(f"  + {f}")
-    print("\nGenerating...")
-    msg = call_gemini_api(diff, api_key)
-    print(f"\n{msg}")
-    if input("\nCommit? [y/n]: ").strip().lower() == "y":
-        if apply_git_commit(msg, path):
-            print("Committed!")
-
-
 if TEXTUAL_AVAILABLE:
 
     class CommitApp(App):
@@ -256,52 +229,87 @@ if TEXTUAL_AVAILABLE:
             self.branch = get_current_branch(path)
             self.generating = False
             self.selected = 0
-            self.button_labels = ["Generate", "Apply & Commit", "Copy", "Quit"]
+            self.button_labels = ["Generate", "Apply", "Copy", "Quit"]
             self.spinner_char_index = 0
             self.current_spinner_message = ""
             self.spinner_timer = None
 
         def compose(self) -> ComposeResult:
-            yield Static(f"⬡ ai-commit", id="header-title")
-            yield Static(f"│ {self.branch}", id="header-subtitle")
-            
-            with VerticalScroll(id="main"):
-                with Container(id="staged-panel"):
-                    yield Static("Staged Changes", id="staged-title")
-                    if self.staged_files:
-                        yield Static("\n".join(f"+ {f}" for f in self.staged_files), id="staged-list")
-                    else:
-                        yield Static("No staged changes", id="staged-list")
-                yield Static("─" * 40, classes="divider")
-                with Container(id="message-panel"):
-                    yield Static("Generated Message", id="message-title")
-                    yield Static("", id="message-content")
-                yield Static("Ready", id="status")
-            
+            yield Static("", id="header")
+            yield Static("", classes="hline")
+            yield Static("❯ STAGED CHANGES", classes="section-label")
+            yield Static("", id="file-count")
+            yield Static("", id="file-list")
+            yield Static("", classes="hline")
+            yield Static("❯ COMMIT MESSAGE", classes="section-label")
+            yield Static("", id="commit-list")
+            yield Static("", id="spinner-line")
+            yield Static("", classes="hline")
             yield Static("", id="buttons")
-            
-            yield Static("g Generate  a Apply  c Copy  q Quit  ← → Navigate", id="footer-keys")
 
         def on_mount(self) -> None:
+            self._render_all()
+
+        def _render_all(self) -> None:
+            self._render_header()
+            self._render_files()
+            self._render_commit()
             self._render_buttons()
 
-        def _render_buttons(self) -> None:
-            container = self.query_one("#buttons", Static)
-            buttons = []
-            
-            for i, label in enumerate(self.button_labels):
-                if self.selected == i:
-                    prefix = "▶"
-                    buttons.append(f"{prefix} {label}")
-                else:
-                    buttons.append(f" {label} ")
-            
-            container.update("   ".join(buttons))
+        def _render_header(self) -> None:
+            self.query_one("#header", Static).update(
+                "[#e8624a]◆[/#e8624a] [bold white]ai-commit[/bold white]          [#444444]branch: " + self.branch + "[/#444444]"
+            )
 
-        def on_mount_action(self) -> None:
+        def _render_files(self) -> None:
+            count = self.query_one("#file-count", Static)
+            files = self.query_one("#file-list", Static)
+            
             if not self.staged_files:
-                self.query_one("#status", Static).update("No staged changes. Run git add first.")
-                self.query_one("#status").add_class("status-error")
+                count.update("[#e24b4a]no staged changes — run git add first[/#e24b4a]")
+                files.update("")
+                return
+            
+            count.update("[#555555]" + str(len(self.staged_files)) + " files staged[/#555555]")
+            
+            files_to_show = self.staged_files[:5]
+            remaining = len(self.staged_files) - 5
+            
+            lines = []
+            for f in files_to_show:
+                parts = f.split("/")
+                short_path = "/".join(parts[-2:]) if len(parts) >= 2 else f
+                lines.append("[#e8624a]●[/#e8624a] " + short_path)
+            
+            if remaining > 0:
+                lines.append("[#555555]+ " + str(remaining) + " more files[/#555555]")
+            
+            files.update("\n".join(lines))
+
+        def _render_commit(self) -> None:
+            commit = self.query_one("#commit-list", Static)
+            if self.commit_message:
+                commit.update("[#e8624a bold]" + self.commit_message + "[/#e8624a bold]")
+            else:
+                commit.update("[#333333 italic]waiting for generation —[/#333333 italic]")
+
+        def _render_buttons(self) -> None:
+            btns = self.query_one("#buttons", Static)
+            parts = []
+            for i, label in enumerate(self.button_labels):
+                key = ["g", "a", "c", "q"][i]
+                if i == self.selected:
+                    parts.append("[#e8624a bold][" + key + "] " + label + "[/#e8624a bold]")
+                else:
+                    parts.append("[#444444] " + key + "  " + label + "  [/#444444]")
+            btns.update("  " + "  ".join(parts))
+
+        def _render_spinner(self, show: bool) -> None:
+            spinner = self.query_one("#spinner-line", Static)
+            if show:
+                spinner.update("[#e8624a]●[/#e8624a] " + self.current_spinner_message)
+            else:
+                spinner.update("")
 
         def action_left(self) -> None:
             self.selected = (self.selected - 1) % 4
@@ -328,9 +336,8 @@ if TEXTUAL_AVAILABLE:
             self.spinner_char_index = 0
             self.current_spinner_message = random.choice(SPINNER_MESSAGES)
             
-            self.query_one("#status", Static).add_class("status-generating")
-            
-            self.spinner_timer = self.set_interval(0.6, self._update_spinner)
+            self._render_spinner(True)
+            self.spinner_timer = self.set_interval(0.1, self._update_spinner)
             
             def worker():
                 msg = call_gemini_api(self.diff, self.api_key)
@@ -340,42 +347,45 @@ if TEXTUAL_AVAILABLE:
 
         def _update_spinner(self) -> None:
             spinner_char = SPINNER_CHARS[self.spinner_char_index % len(SPINNER_CHARS)]
-            self.query_one("#status", Static).update(f"{spinner_char} {self.current_spinner_message}")
+            self.query_one("#spinner-line", Static).update(f"{spinner_char} {self.current_spinner_message}")
             self.spinner_char_index += 1
 
         def _on_generated(self, message: str) -> None:
             if self.spinner_timer:
                 self.spinner_timer.stop()
                 self.spinner_timer = None
-            self.commit_message = message or "Failed to generate"
-            self.query_one("#message-content", Static).update(self.commit_message)
-            self.query_one("#status", Static).update("✓ Done")
-            self.query_one("#status").remove_class("status-generating")
+            
+            self.commit_message = message or ""
+            self._render_spinner(False)
+            self._render_commit()
             self.generating = False
             self._render_buttons()
 
         def action_apply(self) -> None:
             if not self.commit_message:
+                self.query_one("#spinner-line", Static).update("[#e24b4a]no message to commit[/#e24b4a]")
+                self.call_later(lambda: self._render_spinner(False), 2)
                 return
+            
             if apply_git_commit(self.commit_message, self.path):
-                self.query_one("#status", Static).update("Committed!")
-                self.exit()
+                self.query_one("#spinner-line", Static).update("[#4caf7d]✓ committed![/#4caf7d]")
+                self.call_later(self.exit, 1)
             else:
-                self.query_one("#status", Static).update("Commit failed")
-                self.query_one("#status").add_class("status-error")
+                self.query_one("#spinner-line", Static).update("[#e24b4a]commit failed[/#e24b4a]")
 
         def action_copy(self) -> None:
             if not self.commit_message:
+                self.query_one("#spinner-line", Static).update("[#e24b4a]no message to copy[/#e24b4a]")
+                self.call_later(lambda: self._render_spinner(False), 2)
                 return
+            
             if PYPERCLIP_AVAILABLE:
                 pyperclip.copy(self.commit_message)
-                self.query_one("#status", Static).update("Copied!")
+                self.query_one("#spinner-line", Static).update("[#4caf7d]✓ copied to clipboard[/#4caf7d]")
             else:
-                self.query_one("#status", Static).update("Copy not available")
-            self.call_later(self._reset_status)
-
-        def _reset_status(self) -> None:
-            self.query_one("#status", Static).update("Done")
+                self.query_one("#spinner-line", Static).update("[#e24b4a]pyperclip not available[/#e24b4a]")
+            
+            self.call_later(lambda: self._render_spinner(False), 2)
 
         def action_quit(self) -> None:
             self.exit()
@@ -400,7 +410,8 @@ def main() -> None:
             app = CommitApp(diff, api_key, args.dir)
             app.run()
         else:
-            run_interactive_cli(diff, api_key, args.dir)
+            print("Error: textual not installed")
+            sys.exit(1)
         return
 
     commit_message = call_gemini_api(diff, api_key)
