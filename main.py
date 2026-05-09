@@ -298,11 +298,35 @@ if TEXTUAL_AVAILABLE:
             parts = []
             for i, label in enumerate(self.button_labels):
                 key = ["g", "a", "c", "q"][i]
-                if i == self.selected:
+                disabled = getattr(self, 'committing', False) or getattr(self, 'generating', False)
+                if i == self.selected and not disabled:
                     parts.append("[#e8624a bold][" + key + "] " + label + "[/#e8624a bold]")
+                elif disabled:
+                    parts.append("[#333333] " + key + "  " + label + "  [/#333333]")
                 else:
                     parts.append("[#444444] " + key + "  " + label + "  [/#444444]")
             btns.update("  " + "  ".join(parts))
+
+        def _start_spinner(self, message: str) -> None:
+            self.committing = True
+            self.spinner_char_index = 0
+            self.current_spinner_message = message
+            self._render_buttons()
+            self.spinner_timer = self.set_interval(0.1, self._update_spinner_commit)
+
+        def _update_spinner_commit(self) -> None:
+            spinner_char = SPINNER_CHARS[self.spinner_char_index % len(SPINNER_CHARS)]
+            self.query_one("#spinner-line", Static).update(f"[#e8624a]{spinner_char}[/#e8624a] {self.current_spinner_message}")
+            self.spinner_char_index += 1
+
+        def _stop_spinner(self, final_message: str, color: str) -> None:
+            if self.spinner_timer:
+                self.spinner_timer.stop()
+                self.spinner_timer = None
+            self.query_one("#spinner-line", Static).update(f"[{color}]{final_message}[/{color}]")
+            self.committing = False
+            self._render_buttons()
+            self.call_later(lambda: self.query_one("#spinner-line", Static).update(""), 3)
 
         def _render_spinner(self, show: bool) -> None:
             spinner = self.query_one("#spinner-line", Static)
@@ -364,19 +388,42 @@ if TEXTUAL_AVAILABLE:
         def action_apply(self) -> None:
             if not self.commit_message:
                 self.query_one("#spinner-line", Static).update("[#e24b4a]no message to commit[/#e24b4a]")
-                self.call_later(lambda: self._render_spinner(False), 2)
+                self.call_later(lambda: self.query_one("#spinner-line", Static).update(""), 2)
                 return
             
-            if apply_git_commit(self.commit_message, self.path):
-                self.query_one("#spinner-line", Static).update("[#4caf7d]✓ committed![/#4caf7d]")
-                self.call_later(self.exit, 1)
-            else:
-                self.query_one("#spinner-line", Static).update("[#e24b4a]commit failed[/#e24b4a]")
+            self._start_spinner("Committing...")
+            
+            def worker():
+                success = apply_git_commit(self.commit_message, self.path)
+                if success:
+                    self.call_later(self._on_commit_success)
+                else:
+                    self.call_later(self._on_commit_failure)
+            
+            threading.Thread(target=worker, daemon=True).start()
+
+        def _on_commit_success(self) -> None:
+            if self.spinner_timer:
+                self.spinner_timer.stop()
+                self.spinner_timer = None
+            self.query_one("#spinner-line", Static).update("[#4caf7d]✓ Committed successfully[/#4caf7d]")
+            self.committing = False
+            self._render_buttons()
+            self.call_later(self.exit, 3)
+
+        def _on_commit_failure(self) -> None:
+            if self.spinner_timer:
+                self.spinner_timer.stop()
+                self.spinner_timer = None
+            self.query_one("#spinner-line", Static).update("[#e24b4a]✗ Commit failed — check git status[/#e24b4a]")
+            self.committing = False
+            self._render_buttons()
+            self.call_later(lambda: self.query_one("#spinner-line", Static).update(""), 3)
 
         def action_copy(self) -> None:
             if not self.commit_message:
                 self.query_one("#spinner-line", Static).update("[#e24b4a]no message to copy[/#e24b4a]")
-                self.call_later(lambda: self._render_spinner(False), 2)
+                self.call_later(lambda: self.query_one("#spinner-line", Static).update(""), 2)
                 return
             
             if PYPERCLIP_AVAILABLE:
@@ -385,7 +432,7 @@ if TEXTUAL_AVAILABLE:
             else:
                 self.query_one("#spinner-line", Static).update("[#e24b4a]pyperclip not available[/#e24b4a]")
             
-            self.call_later(lambda: self._render_spinner(False), 2)
+            self.call_later(lambda: self.query_one("#spinner-line", Static).update(""), 2)
 
         def action_quit(self) -> None:
             self.exit()
