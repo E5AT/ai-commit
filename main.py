@@ -326,7 +326,7 @@ if TEXTUAL_AVAILABLE:
             self.committing = False
             self.generating = False
             self._render_buttons()
-            self.call_later(lambda: self.query_one("#spinner-line", Static).update(""), 3)
+            self.call_later(lambda _: self.query_one("#spinner-line", Static).update(""), 3)
 
         def action_left(self) -> None:
             self.selected = (self.selected - 1) % 4
@@ -382,7 +382,7 @@ if TEXTUAL_AVAILABLE:
         def action_apply(self) -> None:
             if not self.commit_message:
                 self.query_one("#spinner-line", Static).update("[" + ERROR + "]no message to commit[/" + ERROR + "]")
-                self.call_later(lambda: self.query_one("#spinner-line", Static).update(""), 2)
+                self.call_later(lambda _: self.query_one("#spinner-line", Static).update(""), 2)
                 return
 
             self._start_spinner("Committing...", use_color=True)
@@ -412,12 +412,12 @@ if TEXTUAL_AVAILABLE:
             self.query_one("#spinner-line", Static).update("[" + ERROR + "]✗ Commit failed — check git status[/" + ERROR + "]")
             self.committing = False
             self._render_buttons()
-            self.call_later(lambda: self.query_one("#spinner-line", Static).update(""), 3)
+            self.call_later(lambda _: self.query_one("#spinner-line", Static).update(""), 3)
 
         def action_copy(self) -> None:
             if not self.commit_message:
                 self.query_one("#spinner-line", Static).update("[" + ERROR + "]no message to copy[/" + ERROR + "]")
-                self.call_later(lambda: self.query_one("#spinner-line", Static).update(""), 2)
+                self.call_later(lambda _: self.query_one("#spinner-line", Static).update(""), 2)
                 return
 
             if PYPERCLIP_AVAILABLE:
@@ -426,7 +426,7 @@ if TEXTUAL_AVAILABLE:
             else:
                 self.query_one("#spinner-line", Static).update("[" + ERROR + "]pyperclip not available[/" + ERROR + "]")
 
-            self.call_later(lambda: self.query_one("#spinner-line", Static).update(""), 2)
+            self.call_later(lambda _: self.query_one("#spinner-line", Static).update(""), 2)
 
         def action_quit(self) -> None:
             self.exit()
