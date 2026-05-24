@@ -187,12 +187,8 @@ def call_gemini_api(diff: str, api_key: str) -> str:
     try:
         response = model.generate_content(f"Git diff:\n{diff}")
         return response.text.strip() if response.text else ""
-    except Exception:
-        try:
-            response = model.generate_content(f"Git diff:\n{diff}")
-            return response.text.strip() if response.text else ""
-        except Exception:
-            return ""
+    except Exception as e:
+        return f"ERROR: {type(e).__name__}: {e}"
 
 
 def apply_git_commit(message: str, path: str | None = None) -> bool:
@@ -228,6 +224,7 @@ if TEXTUAL_AVAILABLE:
             self.staged_files = get_staged_files(path)
             self.branch = get_current_branch(path)
             self.generating = False
+            self.committing = False
             self.selected = 0
             self.button_labels = ["Generate", "Apply", "Copy", "Quit"]
             self.spinner_char_index = 0
@@ -258,7 +255,7 @@ if TEXTUAL_AVAILABLE:
 
         def _render_header(self) -> None:
             self.query_one("#header", Static).update(
-                "[#e8624a]◆[/#e8624a] [bold white]ai-commit[/bold white]          [#444444]branch: " + self.branch + "[/#444444]"
+                "[" + ACCENT + "]◆[/" + ACCENT + "] [bold white]ai-commit[/bold white]          [" + TEXT_MID + "]branch: " + self.branch + "[/" + TEXT_MID + "]"
             )
 
         def _render_files(self) -> None:
@@ -266,11 +263,11 @@ if TEXTUAL_AVAILABLE:
             files = self.query_one("#file-list", Static)
             
             if not self.staged_files:
-                count.update("[#e24b4a]no staged changes — run git add first[/#e24b4a]")
+                count.update("[" + ERROR + "]no staged changes — run git add first[/" + ERROR + "]")
                 files.update("")
                 return
             
-            count.update("[#555555]" + str(len(self.staged_files)) + " files staged[/#555555]")
+            count.update("[" + TEXT_LIGHT + "]" + str(len(self.staged_files)) + " files staged[/" + TEXT_LIGHT + "]")
             
             files_to_show = self.staged_files[:5]
             remaining = len(self.staged_files) - 5
@@ -279,19 +276,19 @@ if TEXTUAL_AVAILABLE:
             for f in files_to_show:
                 parts = f.split("/")
                 short_path = "/".join(parts[-2:]) if len(parts) >= 2 else f
-                lines.append("[#e8624a]●[/#e8624a] " + short_path)
+                lines.append("[" + ACCENT + "]●[/" + ACCENT + "] " + short_path)
             
             if remaining > 0:
-                lines.append("[#555555]+ " + str(remaining) + " more files[/#555555]")
+                lines.append("[" + TEXT_LIGHT + "]+ " + str(remaining) + " more files[/" + TEXT_LIGHT + "]")
             
             files.update("\n".join(lines))
 
         def _render_commit(self) -> None:
             commit = self.query_one("#commit-list", Static)
             if self.commit_message:
-                commit.update("[#e8624a bold]" + self.commit_message + "[/#e8624a bold]")
+                commit.update("[" + ACCENT + " bold]" + self.commit_message + "[/" + ACCENT + " bold]")
             else:
-                commit.update("[#333333 italic]waiting for generation —[/#333333 italic]")
+                commit.update("[" + TEXT_DIM + " italic]waiting for generation —[/" + TEXT_DIM + " italic]")
 
         def _render_buttons(self) -> None:
             btns = self.query_one("#buttons", Static)
@@ -300,23 +297,25 @@ if TEXTUAL_AVAILABLE:
                 key = ["g", "a", "c", "q"][i]
                 disabled = getattr(self, 'committing', False) or getattr(self, 'generating', False)
                 if i == self.selected and not disabled:
-                    parts.append("[#e8624a bold][" + key + "] " + label + "[/#e8624a bold]")
+                    parts.append("[" + ACCENT + " bold][" + key + "] " + label + "[/" + ACCENT + " bold]")
                 elif disabled:
-                    parts.append("[#333333] " + key + "  " + label + "  [/#333333]")
+                    parts.append("[" + TEXT_DIM + "] " + key + "  " + label + "  [/" + TEXT_DIM + "]")
                 else:
-                    parts.append("[#444444] " + key + "  " + label + "  [/#444444]")
+                    parts.append("[" + TEXT_MID + "] " + key + "  " + label + "  [/" + TEXT_MID + "]")
             btns.update("  " + "  ".join(parts))
 
-        def _start_spinner(self, message: str) -> None:
+        def _start_spinner(self, message: str, use_color: bool = True) -> None:
             self.committing = True
+            self.generating = True
             self.spinner_char_index = 0
             self.current_spinner_message = message
             self._render_buttons()
-            self.spinner_timer = self.set_interval(0.1, self._update_spinner_commit)
+            self.spinner_timer = self.set_interval(0.1, lambda: self._update_spinner(use_color))
 
-        def _update_spinner_commit(self) -> None:
+        def _update_spinner(self, use_color: bool = True) -> None:
             spinner_char = SPINNER_CHARS[self.spinner_char_index % len(SPINNER_CHARS)]
-            self.query_one("#spinner-line", Static).update(f"[#e8624a]{spinner_char}[/#e8624a] {self.current_spinner_message}")
+            color_tag = f"[{ACCENT}]{spinner_char}[/{ACCENT}] " if use_color else f"{spinner_char} "
+            self.query_one("#spinner-line", Static).update(f"{color_tag}{self.current_spinner_message}")
             self.spinner_char_index += 1
 
         def _stop_spinner(self, final_message: str, color: str) -> None:
@@ -325,15 +324,9 @@ if TEXTUAL_AVAILABLE:
                 self.spinner_timer = None
             self.query_one("#spinner-line", Static).update(f"[{color}]{final_message}[/{color}]")
             self.committing = False
+            self.generating = False
             self._render_buttons()
             self.call_later(lambda: self.query_one("#spinner-line", Static).update(""), 3)
-
-        def _render_spinner(self, show: bool) -> None:
-            spinner = self.query_one("#spinner-line", Static)
-            if show:
-                spinner.update("[#e8624a]●[/#e8624a] " + self.current_spinner_message)
-            else:
-                spinner.update("")
 
         def action_left(self) -> None:
             self.selected = (self.selected - 1) % 4
@@ -356,42 +349,43 @@ if TEXTUAL_AVAILABLE:
         def action_generate(self) -> None:
             if self.generating or not self.staged_files:
                 return
-            self.generating = True
-            self.spinner_char_index = 0
             self.current_spinner_message = random.choice(SPINNER_MESSAGES)
-            
-            self._render_spinner(True)
-            self.spinner_timer = self.set_interval(0.1, self._update_spinner)
-            
+            self._start_spinner(self.current_spinner_message, use_color=False)
+
             def worker():
                 msg = call_gemini_api(self.diff, self.api_key)
                 self.call_later(self._on_generated, msg)
-            
-            threading.Thread(target=worker, daemon=True).start()
 
-        def _update_spinner(self) -> None:
-            spinner_char = SPINNER_CHARS[self.spinner_char_index % len(SPINNER_CHARS)]
-            self.query_one("#spinner-line", Static).update(f"{spinner_char} {self.current_spinner_message}")
-            self.spinner_char_index += 1
+            threading.Thread(target=worker, daemon=True).start()
 
         def _on_generated(self, message: str) -> None:
             if self.spinner_timer:
                 self.spinner_timer.stop()
                 self.spinner_timer = None
-            
-            self.commit_message = message or ""
-            self._render_spinner(False)
+
+            if message and not message.startswith("ERROR:"):
+                self.commit_message = message
+                self.query_one("#spinner-line", Static).update("")
+            else:
+                self.commit_message = ""
+                if message and "429" in message:
+                    self.query_one("#spinner-line", Static).update("[" + ERROR + "]rate limit exceeded — try again later[/" + ERROR + "]")
+                else:
+                    error_msg = message.replace("ERROR: ", "") if message else "failed to generate message"
+                    self.query_one("#spinner-line", Static).update("[" + ERROR + "]" + error_msg + "[/" + ERROR + "]")
+
             self._render_commit()
             self.generating = False
+            self.committing = False
             self._render_buttons()
 
         def action_apply(self) -> None:
             if not self.commit_message:
-                self.query_one("#spinner-line", Static).update("[#e24b4a]no message to commit[/#e24b4a]")
+                self.query_one("#spinner-line", Static).update("[" + ERROR + "]no message to commit[/" + ERROR + "]")
                 self.call_later(lambda: self.query_one("#spinner-line", Static).update(""), 2)
                 return
-            
-            self._start_spinner("Committing...")
+
+            self._start_spinner("Committing...", use_color=True)
             
             def worker():
                 success = apply_git_commit(self.commit_message, self.path)
@@ -406,7 +400,7 @@ if TEXTUAL_AVAILABLE:
             if self.spinner_timer:
                 self.spinner_timer.stop()
                 self.spinner_timer = None
-            self.query_one("#spinner-line", Static).update("[#4caf7d]✓ Committed successfully[/#4caf7d]")
+            self.query_one("#spinner-line", Static).update("[" + SUCCESS + "]✓ Committed successfully[/" + SUCCESS + "]")
             self.committing = False
             self._render_buttons()
             self.call_later(self.exit, 3)
@@ -415,23 +409,23 @@ if TEXTUAL_AVAILABLE:
             if self.spinner_timer:
                 self.spinner_timer.stop()
                 self.spinner_timer = None
-            self.query_one("#spinner-line", Static).update("[#e24b4a]✗ Commit failed — check git status[/#e24b4a]")
+            self.query_one("#spinner-line", Static).update("[" + ERROR + "]✗ Commit failed — check git status[/" + ERROR + "]")
             self.committing = False
             self._render_buttons()
             self.call_later(lambda: self.query_one("#spinner-line", Static).update(""), 3)
 
         def action_copy(self) -> None:
             if not self.commit_message:
-                self.query_one("#spinner-line", Static).update("[#e24b4a]no message to copy[/#e24b4a]")
+                self.query_one("#spinner-line", Static).update("[" + ERROR + "]no message to copy[/" + ERROR + "]")
                 self.call_later(lambda: self.query_one("#spinner-line", Static).update(""), 2)
                 return
-            
+
             if PYPERCLIP_AVAILABLE:
                 pyperclip.copy(self.commit_message)
-                self.query_one("#spinner-line", Static).update("[#4caf7d]✓ copied to clipboard[/#4caf7d]")
+                self.query_one("#spinner-line", Static).update("[" + SUCCESS + "]✓ copied to clipboard[/" + SUCCESS + "]")
             else:
-                self.query_one("#spinner-line", Static).update("[#e24b4a]pyperclip not available[/#e24b4a]")
-            
+                self.query_one("#spinner-line", Static).update("[" + ERROR + "]pyperclip not available[/" + ERROR + "]")
+
             self.call_later(lambda: self.query_one("#spinner-line", Static).update(""), 2)
 
         def action_quit(self) -> None:
